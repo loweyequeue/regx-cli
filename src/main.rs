@@ -13,6 +13,9 @@ struct Cli {
     #[arg(short, long, conflicts_with = "label")]
     index: Option<Vec<usize>>,
 
+    #[arg(short, long)]
+    color: bool,
+
     #[arg(required = true)]
     regex: String,
 }
@@ -46,16 +49,26 @@ fn print_match<D: std::fmt::Display>(m: D) {
 }
 
 /// Simple search, print any line that matches
-fn search_simple(rx: Regex, stdin: io::Stdin) {
+fn search_simple(rx: Regex, stdin: io::Stdin, cli: Cli) {
     for line in stdin.lock().lines().map_while(Result::ok) {
         if let Some(m) = rx.find(&line) {
-            print_match(m.as_str());
+            if !cli.color {
+                print_match(line);
+            } else {
+                let colored = format!("\x1b[31m{}\x1b[0m", m.as_str());
+                let pre = &line[..m.start()];
+                let post = &line[m.end()..];
+                print_match(format!("{}{}{}", pre, colored, post));
+            }
         }
     }
 }
 
 /// Search and extract data using capture groups
 fn search_extract(rx: Regex, stdin: io::Stdin, cli: Cli) {
+    if cli.color {
+        eprintln!("Warning: color not supported with capture groups")
+    }
     for line in stdin.lock().lines().map_while(Result::ok) {
         if let Some(groups) = rx.captures(&line) {
             if let Some(labels) = &cli.label {
@@ -85,7 +98,7 @@ fn main() {
     let stdin = io::stdin();
 
     match cli.mode() {
-        RegexMode::Simple => search_simple(rx, stdin),
+        RegexMode::Simple => search_simple(rx, stdin, cli),
         RegexMode::Extract => search_extract(rx, stdin, cli),
     }
 }
