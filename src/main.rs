@@ -1,3 +1,4 @@
+use atty::Stream;
 use std::io::{self, BufRead, Write};
 
 use clap::Parser;
@@ -13,8 +14,8 @@ struct Cli {
     #[arg(short, long, conflicts_with = "label")]
     index: Option<Vec<usize>>,
 
-    #[arg(short, long)]
-    color: bool,
+    #[arg(long)]
+    no_color: bool,
 
     #[arg(required = true)]
     regex: String,
@@ -50,9 +51,10 @@ fn print_match<D: std::fmt::Display>(m: D) {
 
 /// Simple search, print any line that matches
 fn search_simple(rx: Regex, stdin: io::Stdin, cli: Cli) {
+    let use_color = !cli.no_color && atty::is(Stream::Stdout);
     for line in stdin.lock().lines().map_while(Result::ok) {
         if let Some(m) = rx.find(&line) {
-            if !cli.color {
+            if !use_color {
                 print_match(line);
             } else {
                 let colored = format!("\x1b[31m{}\x1b[0m", m.as_str());
@@ -66,9 +68,6 @@ fn search_simple(rx: Regex, stdin: io::Stdin, cli: Cli) {
 
 /// Search and extract data using capture groups
 fn search_extract(rx: Regex, stdin: io::Stdin, cli: Cli) {
-    if cli.color {
-        eprintln!("Warning: color not supported with capture groups")
-    }
     for line in stdin.lock().lines().map_while(Result::ok) {
         if let Some(groups) = rx.captures(&line) {
             if let Some(labels) = &cli.label {
